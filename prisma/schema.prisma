@@ -1,0 +1,659 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================== ENUM ==================================
+enum Role {
+  ADMIN
+  STAFF
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
+enum StudentStatus {
+  ACTIVE // Đang tham gia học
+  PAUSED // Đang tạm ngưng học
+  DROPPED // Đã rời khỏi chương trình học, không còn tham gia lớp hiện tại
+}
+
+enum TeacherStatus {
+  ACTIVE // đang dạy bình thường
+  PAUSED // tạm nghỉ (có thể quay lại)
+  INACTIVE // nghỉ việc / dừng hợp tác
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum TeacherRole {
+  TEACHER
+  ASSISTANT
+  BOTH
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum CourseStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  DELETED
+}
+
+enum EnrollmentStatus {
+  ACTIVE      // Đang học
+  PAUSED      // Bảo lưu
+  DROPPED     // Nghỉ giữa chừng
+  COMPLETED   // Hoàn thành
+  CANCELLED   // Hủy trước khi học
+}
+
+enum AttendanceStatus {
+  PRESENT // Có mặt đầy đủ
+  ABSENT // Vắng không phép
+  LATE // Đi trễ
+  EXCUSED // Vắng có phép (có lý do hợp lệ)
+}
+
+enum SessionStatus {
+  SCHEDULED  // Buổi học đã được tạo từ schedule, Chưa diễn ra
+  DONE  // Buổi học đã diễn ra xong
+  CANCELLED // Buổi học bị hủy hoàn toàn
+  RESCHEDULED // Buổi học bị dời sang thời gian khác
+}
+
+enum InvoiceStatus {
+  UNPAID // chưa trả
+  PARTIAL // trả 1 phần
+  PAID // đủ
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  SUCCESS
+  CANCELLED
+}
+
+enum RecipientType {
+  PARENT
+  STUDENT
+  STAFF
+}
+
+enum NotificationType {
+  ABSENCE
+  TUITION
+  GENERAL
+  CLASS_REMINDER
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DiscountType {
+  PERCENT
+  AMOUNT
+}
+
+enum PromotionStatus {
+  ACTIVE // đang chạy
+  INACTIVE // bị tắt thủ công
+  EXPIRED // hết hạn
+}
+
+enum ActivityType {
+  CREATE
+  UPDATE
+  DELETE
+  ACTION
+}
+
+// ================================== MODEL ==================================
+model User {
+  id String @id @default(uuid())
+
+  email String @unique
+
+  password String
+
+  fullName String
+
+  phone String?
+
+  address String?
+
+  avatarUrl String?
+
+  dateOfBirth DateTime?
+
+  gender Gender?
+
+  lastLoginAt DateTime?
+
+  refreshToken String?
+
+  role Role @default(STUDENT)
+
+  status Status @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student?
+
+  teacher Teacher?
+
+  parent Parent?
+
+  recordedAttendances Attendance[]
+  createdResults      LearningResult[]
+  payments            Payment[]
+  leaveReviews        LeaveRequest[]
+  activityLogs        ActivityLog[]
+  Notification        Notification[]
+
+  @@map("users")
+}
+
+model Student {
+  id String @id @default(uuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   Parent? @relation(fields: [parentId], references: [id])
+
+  studentCode String @unique
+
+  gradeLevel String?
+
+  schoolName String?
+
+  latestTestScore Decimal @default(0) @db.Decimal(5, 2)
+
+  entryAcademicLevel String?
+
+  learningGoal String?
+
+  note String?
+
+  status StudentStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendances     Attendance[]
+  learningResults LearningResult[]
+  invoices        TuitionInvoice[]
+  leaveRequests   LeaveRequest[]
+  enrollments     Enrollment[]
+
+  @@map("students")
+}
+
+model Teacher {
+  id String @id @default(uuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  teacherCode String @unique
+
+  teacherRole TeacherRole @default(TEACHER)
+
+  specialization String?
+
+  qualification String?
+
+  yearsOfExperience Int?
+
+  note String?
+
+  status TeacherStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mainClasses      CourseClass[] @relation("MainTeacher")
+  assistantClasses CourseClass[] @relation("AssistantTeacher")
+
+  @@map("teachers")
+}
+
+model Parent {
+  id String @id @default(uuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students Student[]
+
+  @@map("parents")
+}
+
+model Course {
+  id String @id @default(uuid())
+
+  courseCode String @unique
+
+  name String
+
+  description String?
+
+  thumbnailUrl String?
+
+  level CourseLevel?
+
+  totalSessions Int @default(24)
+
+  status CourseStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courseClasses CourseClass[]
+
+  @@map("courses")
+}
+
+model Room {
+  id String @id @default(uuid())
+
+  roomCode String @unique
+
+  name String
+
+  capacity Int
+
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courseClasses CourseClass[]
+
+  @@map("rooms")
+}
+
+model ScheduleSlot {
+  id String @id @default(uuid())
+
+  slotCode String @unique
+
+  // 2 = Mon ... 8 = Sun
+  weekday Int
+
+  startTime String
+  endTime   String
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courseClassSchedules CourseClassSchedule[]
+  courseClassSessions CourseClassSession[]
+
+  @@map("schedule_slots")
+}
+
+model CourseClass {
+  id String @id @default(uuid())
+
+  classCode String @unique
+
+  name String
+
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id])
+
+  mainTeacherId String
+  mainTeacher   Teacher @relation("MainTeacher", fields: [mainTeacherId], references: [id])
+
+  assistantTeacherId String?
+  assistantTeacher   Teacher? @relation("AssistantTeacher", fields: [assistantTeacherId], references: [id])
+
+  startDate DateTime
+
+  endDate DateTime
+
+  maxStudents Int?
+
+  tuitionFee Decimal @default(0) @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions        CourseClassSession[]
+  schedules       CourseClassSchedule[]
+  enrollments     Enrollment[]
+  learningResults LearningResult[]
+  invoices        TuitionInvoice[]
+
+  @@map("course_classes")
+}
+
+model CourseClassSchedule {
+  id String @id @default(uuid())
+
+  courseClassId String
+  courseClass CourseClass @relation(fields: [courseClassId], references: [id], onDelete: Cascade)
+
+  scheduleSlotId String
+  scheduleSlot ScheduleSlot @relation(fields: [scheduleSlotId], references: [id], onDelete: Cascade)
+
+  @@unique([courseClassId, scheduleSlotId])
+
+  @@map("course_class_schedules")
+}
+
+model Enrollment {
+  id String @id @default(uuid())
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  courseClassId String
+  courseClass   CourseClass @relation(fields: [courseClassId], references: [id], onDelete: Cascade)
+
+  status EnrollmentStatus @default(ACTIVE)
+
+  enrolledAt DateTime @default(now())
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, courseClassId])
+  @@map("enrollments")
+}
+
+model CourseClassSession {
+  id String @id @default(uuid())
+
+  courseClassId String
+  courseClass CourseClass @relation(fields: [courseClassId], references: [id], onDelete: Cascade)
+
+  scheduleSlotId String
+  scheduleSlot ScheduleSlot @relation(fields: [scheduleSlotId], references: [id])
+
+  startTime DateTime
+  endTime DateTime
+
+  status SessionStatus @default(SCHEDULED)
+
+  note String?
+
+  attendances Attendance[]
+  leaveRequests   LeaveRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([courseClassId, scheduleSlotId, startTime])
+  @@map("course_class_sessions")
+}
+
+model Attendance {
+  id String @id @default(uuid())
+
+  sessionId String
+  session CourseClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  status AttendanceStatus
+
+  note String?
+
+  recordedByUserId String?
+  recordedByUser User? @relation(fields: [recordedByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, studentId])
+  @@map("attendances")
+}
+
+model LeaveRequest {
+  id String @id @default(uuid())
+
+  studentId String
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  sessionId String
+  session CourseClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  reason String
+
+  status LeaveRequestStatus @default(PENDING)
+
+  reviewerId String?
+  reviewer   User?   @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, sessionId])
+  @@map("leave_requests")
+}
+
+model TuitionInvoice {
+  id String @id @default(uuid())
+
+  invoiceCode String @unique
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  courseClassId String
+  courseClass   CourseClass @relation(fields: [courseClassId], references: [id], onDelete: Cascade)
+
+  /// Tổng học phí gốc trước khi áp dụng bất kỳ giảm giá nào
+  originalAmount Decimal @db.Decimal(12, 2)
+
+  /// Tổng số tiền được giảm (từ promotion, voucher, manual discount...)
+  discountAmount Decimal @default(0) @db.Decimal(12, 2)
+
+  /// Số tiền phải thanh toán sau khi đã trừ tất cả giảm giá
+  /// Công thức: finalAmount = originalAmount - discountAmount
+  finalAmount Decimal @db.Decimal(12, 2)
+
+  /// Tổng số tiền đã thanh toán từ tất cả payment records
+  amountPaid Decimal @default(0) @db.Decimal(12, 2)
+
+  /// Số tiền còn lại phải thanh toán
+  /// Công thức: balanceAmount = finalAmount - amountPaid
+  balanceAmount Decimal @default(0) @db.Decimal(12, 2)
+
+  status InvoiceStatus @default(UNPAID)
+
+  promotionId String?
+  promotion   Promotion? @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+
+  dueDate DateTime?
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
+
+  @@unique([studentId, courseClassId])
+  @@map("tuition_invoices")
+}
+
+model Promotion {
+  id String @id @default(uuid())
+
+  promoCode String @unique
+
+  name String
+
+  discountType DiscountType
+
+  discountValue Decimal @db.Decimal(12, 2)
+
+  startDate DateTime
+  endDate   DateTime
+
+  status PromotionStatus @default(ACTIVE)
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices TuitionInvoice[]
+
+  @@map("promotions")
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  invoiceId String
+  invoice TuitionInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  paymentCode String @unique
+
+  paidAmount Decimal @db.Decimal(12, 2)
+
+  paymentMethod PaymentMethod
+
+  status PaymentStatus @default(SUCCESS)
+
+  paidAt DateTime
+
+  cashierUserId String?
+  cashierUser User? @relation(fields: [cashierUserId], references: [id], onDelete: SetNull)
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payments")
+}
+
+model LearningResult {
+  id String @id @default(uuid())
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  courseClassId String
+  courseClass   CourseClass @relation(fields: [courseClassId], references: [id], onDelete: Cascade)
+
+  /// Use first day of month (e.g. 2026-09-01)
+  resultMonth DateTime
+
+  score Decimal? @db.Decimal(5, 2)
+
+  teacherComment String?
+
+  createdByUserId String?
+  createdByUser   User?   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, courseClassId, resultMonth])
+  @@map("learning_results")
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  userId String
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+
+  type NotificationType
+
+  title String @db.VarChar(150)
+  content String @db.VarChar(500)
+
+  isRead Boolean @default(false)
+
+  relatedEntityType String?
+  relatedEntityId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model NotificationLog {
+  id String @id @default(uuid())
+
+  sessionId String
+  userId String
+
+  reminderMinutes Int
+
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, userId, reminderMinutes])
+}
+
+model ActivityLog {
+  id String @id @default(uuid())
+
+  type ActivityType
+
+  // ai thực hiện action
+  actorId String?
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  // entity bị tác động
+  entityType String // "student", "invoice", "payment", "course_class"
+  entityId   String
+
+  title       String
+  description String?
+
+  metadata Json? // optional: store extra context
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+}
